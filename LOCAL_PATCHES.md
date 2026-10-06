@@ -186,3 +186,34 @@ set "DFLOW_WATCH_ARGS=--workspace <workspaceId> --spawn-preset <预设名>"
   转换，否则含中文路径的行会被整行搞坏。
 - `.gitignore` 加 `配置.bat` 与 `config.local.bat`。
 
+## 10. bat 编码实测：结论「存 GBK」，但它取决于谁启动
+
+配置外置之后，启动批处理里就出现了中文文件名（`配置.bat`），于是必须先确定 cmd
+到底按什么编码读 bat。同一台机器上实测出两个完全相反的结果：
+
+- **explorer 双击启动**（用户的实际用法）：GBK 编码的 bat 里
+  `if exist "%~dp0配置.bat"` 判定 EXISTS、`call` 成功、变量正常注入。
+  同一内容的 UTF-8 版本反而不写日志、不生效。
+- **从 PowerShell 7 启动 `cmd /c xxx.bat`**：结果反过来——UTF-8 版打 EXISTS，
+  GBK 版报 `'D:\...\????.bat' is not recognized`。
+
+根因是控制台代码页继承：pwsh 7 把 `[Console]::OutputEncoding` 设成 UTF-8(65001)，
+子进程 cmd 就按 UTF-8 解释 bat 内容；explorer 双击时环境是系统默认，本机
+ACP 与 OEMCP 都是 936，于是按 GBK 解释。注册表 `Nls\CodePage` 的 ACP 一直是 936，
+**它并不能代表"cmd 实际用什么读 bat"**，别拿它下结论。
+
+据此定的方案：
+
+- bat 一律存 **GBK、无 BOM、CRLF**（`配置.example.bat`、`_start_dflow.bat`、
+  `启动-自动反推.bat`）。
+- 加载配置写成两行兜底：先试中文名 `配置.bat`，没拿到再试纯 ASCII 名
+  `config.local.bat`。纯 ASCII 那一行在两种代码页下都能命中，所以从 UTF-8 控制台
+  启动也不会静默丢掉配置。
+- **非 ASCII 字符不许出现在 bat 的路径、文件名或命令里**，只允许留在 `rem` 与
+  `echo` 中——这样即使代码页判断错了，最坏也只是提示文字乱码，不会让整条命令失效。
+- `.gitattributes` 的 `* -text` 保证 git 不对这些字节做行尾或编码转换。
+
+排查手法备查：用 Unicode 码点在 PowerShell 里构造文件名（`[char]0x914D + [char]0x7F6E`），
+不要在命令里写中文字面量。否则很容易把**已经是 GBK 的文件再按 UTF-8 读一遍**，
+中文会被替换成 U+FFFD 永久损坏——本次就踩了这个，一度得出现场被污染的假结论。
+
