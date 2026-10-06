@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Runtime and Local User Data
+data/
+
+# Machine-local launcher config (workspace ids, agent presets, personal paths)
+配置.bat
+config.local.bat
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

@@ -1,0 +1,4 @@
+# Keep every byte exactly as committed. The .bat launchers are GBK-encoded because the
+# Chinese Windows console reads them as ANSI, and a line-ending or encoding rewrite there
+# silently corrupts every line that contains a path with Chinese characters.
+* -text
